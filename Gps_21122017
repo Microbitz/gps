@@ -1,0 +1,287 @@
+#define I2C_ADDRESS 0x3C
+#include "SSD1306Ascii.h"
+#include "SSD1306AsciiAvrI2c.h"
+#include <TinyGPS++.h>
+#include <SoftwareSerial.h>
+#include "SSD1306Ascii.h"
+#include "SSD1306AsciiAvrI2c.h"
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#include <MPU6050.h>
+
+#define ARDUINO_GPS_RX 3
+#define ARDUINO_GPS_TX 4
+#define GPS_BAUD 9600
+#define gpsPort ssGPS
+#define SerialMonitor Serial
+#define I2C_ADDRESS 0x3C
+#define Pin 2
+TinyGPSPlus tinyGPS;
+SoftwareSerial ssGPS(ARDUINO_GPS_TX, ARDUINO_GPS_RX);
+OneWire ourWire(Pin);
+DallasTemperature sensors(&ourWire);
+MPU6050 mpu;
+SSD1306AsciiAvrI2c oled;
+
+int led1 = 9;
+int led2 = 10;
+int led3 = 11;
+int led4 = 12;
+int TankValue0;
+int TankValue1;
+int analogInput = 2;
+float vout = 0.0;
+float vin = 0.0;
+float R1 = 100000.0; // resistance of R1 (100K) -see text!
+float R2 = 10000.0; // resistance of R2 (10K) - see text!
+int value = 0;
+int RelayState0 = 0; 
+int RelayState1 = 0; 
+int RelayState2 = 0; 
+int RelayState3 = 0; 
+
+void setup()
+{
+  SerialMonitor.begin(9600);
+  gpsPort.begin(GPS_BAUD);
+  oled.begin(&Adafruit128x64, I2C_ADDRESS);
+  oled.setFont(System5x7);
+  oled.clear();
+  pinMode(led1, OUTPUT);
+  pinMode(led2, OUTPUT);
+  pinMode(led3, OUTPUT);
+  pinMode(led4, OUTPUT);
+  digitalWrite(led1, HIGH);
+  digitalWrite(led2, HIGH);
+  digitalWrite(led3, HIGH);
+  digitalWrite(led4, HIGH);
+  /*while(!mpu.begin(MPU6050_SCALE_2000DPS, MPU6050_RANGE_2G))
+  {
+    Serial.println("Could not find a valid MPU6050 sensor, check wiring!");
+    delay(500);
+  }*/
+  //mpu.calibrateGyro();
+  //mpu.setThreshold(0);
+  sensors.begin();
+}
+
+void loop()
+{
+  RelayState0 = digitalRead(led1);
+  RelayState1 = digitalRead(led2);
+  RelayState2 = digitalRead(led3);
+  RelayState3 = digitalRead(led4);
+   
+  static const double LONDON_LAT = 51.508131, LONDON_LON = -0.128002;
+  int sensorTankValue0 = analogRead(A0);
+  int sensorTankValue1 = analogRead(A1);
+  
+  printGPSInfo();
+  smartDelay(1000);  
+
+  //Vector normGyro = mpu.readNormalizeGyro();
+
+  oled.print("X = ");
+  //oled.print(normGyro.XAxis);
+  oled.print(" ");
+  oled.print("Y = ");
+  //oled.println(normGyro.YAxis);
+  oled.println("Z = ");
+  //oled.println(normGyro.ZAxis);
+  TankValue0 = map(sensorTankValue0, 295, 785, 0, 100);
+  TankValue1 = map(sensorTankValue1, 295, 785, 0, 100);
+  if(TankValue0<0){TankValue0=0;} 
+  if(TankValue1<0){TankValue1=0;} 
+  if(TankValue0>100){TankValue0=100;} 
+  if(TankValue1>100){TankValue1=100;} 
+  oled.print("T0=");
+  oled.print(TankValue0);
+  oled.println(" ");
+  oled.print("T1=");
+  oled.print(TankValue1);
+  oled.println(" ");
+
+ value = analogRead(analogInput);
+   vout = (value * 5.0) / 1024.0; // see text
+   vin = vout / (R2/(R1+R2)); 
+   if (vin<0.09) {
+   vin=0.0;//statement to quash undesired reading !
+} 
+
+  oled.print("V=");
+  oled.println(vin);
+  
+  Serial.print(TankValue0);
+  Serial.print(",");
+  Serial.print(TankValue1);
+  Serial.print(",");
+  Serial.print(vin);
+  Serial.print(",");
+  Serial.print(!RelayState0);
+  Serial.print(",");
+  Serial.print(!RelayState1);
+  Serial.print(",");
+  Serial.print(!RelayState2);
+  Serial.print(",");
+  Serial.println(!RelayState3);
+  
+   oled.setCursor(0,0);
+
+ Relay:  
+  if (Serial.available() > 0)
+  { //cierre del segundo if
+    char datos_serial = Serial.read();
+
+    if (datos_serial == 'A')
+    {
+      if (RelayState0 == HIGH) {
+        Serial.println("enciende 1");
+        digitalWrite(led1, LOW);
+        delay(2000);
+        goto Relay;
+      }
+      if (RelayState0 == LOW) {
+      digitalWrite(led1, HIGH);
+      Serial.println("Apaga 1");
+      delay(2000);
+      goto Relay;
+      }
+    }
+if (datos_serial == 'B')
+    {
+      if (RelayState1 == HIGH) {
+        Serial.println("enciende 2");
+        digitalWrite(led2, LOW);
+        delay(2000);
+        goto Relay;
+      }
+      if (RelayState1 == LOW) {
+      digitalWrite(led2, HIGH);
+      Serial.println("Apaga 2");
+      delay(2000);
+      goto Relay;
+      }
+    }
+if (datos_serial == 'C')
+    {
+      if (RelayState2 == HIGH) {
+        Serial.println("enciende 3");
+        digitalWrite(led3, LOW);
+        delay(2000);
+        goto Relay;
+      }
+      if (RelayState2 == LOW) {
+      digitalWrite(led3, HIGH);
+      Serial.println("Apaga 3");
+      delay(2000);
+      goto Relay;
+      }
+    }
+if (datos_serial == 'D')
+    {
+      if (RelayState3 == HIGH) {
+        Serial.println("enciende 4");
+        digitalWrite(led4, LOW);
+        delay(2000);
+        goto Relay;
+      }
+      if (RelayState3 == LOW) {
+      digitalWrite(led4, HIGH);
+      Serial.println("Apaga 4");
+      delay(2000);
+      goto Relay;
+      }
+    }
+    if (datos_serial == 'E')
+    {
+      digitalWrite(led1, HIGH);
+      digitalWrite(led2, HIGH);
+      digitalWrite(led3, HIGH);
+      digitalWrite(led4, HIGH);
+    }
+  }
+
+}
+
+void printGPSInfo()
+{
+
+  //SerialMonitor.print("Lat: "); SerialMonitor.println(tinyGPS.location.lat(), 6);
+  //SerialMonitor.print("Long: "); SerialMonitor.println(tinyGPS.location.lng(), 6);
+  //SerialMonitor.print("Alt: "); SerialMonitor.println(tinyGPS.altitude.feet());
+  //SerialMonitor.print("Course: "); SerialMonitor.println(tinyGPS.course.deg());
+  //SerialMonitor.print("Speed: "); SerialMonitor.println(tinyGPS.speed.mph());
+  //SerialMonitor.print("Date: "); printDate();
+  //SerialMonitor.print("Time: "); printTime();
+  //SerialMonitor.print("Sats: "); SerialMonitor.println(tinyGPS.satellites.value());
+  //SerialMonitor.println();
+
+SerialMonitor.print(tinyGPS.location.lat(), 6);
+SerialMonitor.print(",");
+SerialMonitor.print(tinyGPS.location.lng(), 6);
+SerialMonitor.print(",");
+SerialMonitor.print(tinyGPS.course.deg());
+SerialMonitor.print(",");
+sensors.requestTemperatures();       
+Serial.print(sensors.getTempCByIndex(0));
+Serial.print(",");
+//Serial.println("24.3");
+  
+  oled.print("Lat: "); oled.println(tinyGPS.location.lat(), 6);
+  oled.print("Long: "); oled.println(tinyGPS.location.lng(), 6);
+  //oled.print("Alt: "); oled.println(tinyGPS.altitude.feet());
+  //oled.print("Course: "); oled.println(tinyGPS.course.deg());
+  //oled.print("Speed: "); oled.println(tinyGPS.speed.mph());
+  oled.print("Date: "); printDate();
+  oled.print("Time: "); printTime();
+  //oled.print("Sats: "); oled.println(tinyGPS.satellites.value());
+  oled.print(sensors.getTempCByIndex(0)); 
+
+}
+
+
+static void smartDelay(unsigned long ms)
+{
+  unsigned long start = millis();
+  do
+  {
+
+    while (gpsPort.available())
+      tinyGPS.encode(gpsPort.read());
+  } while (millis() - start < ms);
+}
+
+
+void printDate()
+{
+  /*SerialMonitor.print(tinyGPS.date.day());
+  SerialMonitor.print("/");
+  SerialMonitor.print(tinyGPS.date.month());
+  SerialMonitor.print("/");
+  SerialMonitor.println(tinyGPS.date.year());*/
+
+  oled.print(tinyGPS.date.day());
+  oled.print("/");
+  oled.print(tinyGPS.date.month());
+  oled.print("/");
+  oled.println(tinyGPS.date.year());
+}
+
+void printTime()
+{
+  /*SerialMonitor.print(tinyGPS.time.hour());
+  SerialMonitor.print(":");
+  if (tinyGPS.time.minute() < 10) SerialMonitor.print('0');
+  SerialMonitor.print(tinyGPS.time.minute());
+  SerialMonitor.print(":");
+  if (tinyGPS.time.second() < 10) SerialMonitor.print('0');
+  SerialMonitor.println(tinyGPS.time.second());*/
+
+  oled.print(tinyGPS.time.hour());
+  oled.print(":");
+  if (tinyGPS.time.minute() < 10) oled.print('0');
+  oled.print(tinyGPS.time.minute());
+  oled.print(":");
+  if (tinyGPS.time.second() < 10) oled.print('0');
+  oled.println(tinyGPS.time.second());
+}
